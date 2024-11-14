@@ -22,11 +22,20 @@ class VideoProcessor:
             'cash_drawer': False,
             'employee_detection': True,
             'door_detection': {'detected': False, 'status': 'Unknown', 'movement': None},
-            'people_counting': {'male': 0, 'female': 0},
+            'people_counting': {'male': 0, 'female': 0, 'total': 0},
             'face_recognition': []
         }
-        # Load the YOLOv8 model
+        # Load the YOLOv8 model for door detection
         self.door_model = YOLO('door_detection.pt')
+        
+        # Load face detection model
+        self.face_net = cv2.dnn.readNetFromCaffe("deploy.prototxt", "res10_300x300_ssd_iter_140000.caffemodel")
+        
+        # Load gender detection model
+        self.gender_net = cv2.dnn.readNetFromCaffe("gender_deploy.prototxt", "gender_net.caffemodel")
+        
+        self.gender_list = ['Male', 'Female']
+        
         self.previous_door_box = None
         self.door_movement_threshold = 5  # pixels
         self.frame_size = (640, 480)  # Set a fixed frame size
@@ -188,15 +197,46 @@ class VideoProcessor:
                     self.previous_door_box = None
                 
                 self.previous_door_frame = frame
+            elif stream_name == 'people_counting':
+                blob = cv2.dnn.blobFromImage(cv2.resize(frame, (300, 300)), 1.0, (300, 300), (104.0, 177.0, 123.0))
+                self.face_net.setInput(blob)
+                detections = self.face_net.forward()
+                
+                male_count = 0
+                female_count = 0
+                
+                for i in range(detections.shape[2]):
+                    confidence = detections[0, 0, i, 2]
+                    if confidence > 0.5:
+                        box = detections[0, 0, i, 3:7] * np.array([frame.shape[1], frame.shape[0], frame.shape[1], frame.shape[0]])
+                        (x, y, x1, y1) = box.astype("int")
+                        
+                        face = frame[y:y1, x:x1]
+                        if face.shape[0] > 0 and face.shape[1] > 0:
+                            blob = cv2.dnn.blobFromImage(face, 1.0, (227, 227), (78.4263377603, 87.7689143744, 114.895847746), swapRB=False)
+                            self.gender_net.setInput(blob)
+                            gender_preds = self.gender_net.forward()
+                            gender = self.gender_list[gender_preds[0].argmax()]
+                            
+                            if gender == 'Male':
+                                male_count += 1
+                                color = (255, 0, 0)  # Blue for male
+                            else:
+                                female_count += 1
+                                color = (255, 0, 255)  # Pink for female
+                            
+                            cv2.rectangle(rgb_frame, (x, y), (x1, y1), color, 2)
+                            cv2.putText(rgb_frame, gender, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+                
+                self.results[stream_name] = {
+                    'male': male_count,
+                    'female': female_count,
+                    'total': male_count + female_count
+                }
             elif stream_name == 'cash_drawer':
                 self.results[stream_name] = np.random.choice([True, False], p=[0.1, 0.9])
             elif stream_name == 'employee_detection':
                 self.results[stream_name] = np.random.choice([True, False], p=[0.8, 0.2])
-            elif stream_name == 'people_counting':
-                self.results[stream_name] = {
-                    'male': np.random.randint(0, 10),
-                    'female': np.random.randint(0, 10)
-                }
             elif stream_name == 'face_recognition':
                 if np.random.random() < 0.1:
                     self.results[stream_name].append({
@@ -221,6 +261,10 @@ class VideoProcessor:
             detections.append("Cash drawer opened")
         elif stream_name == 'employee_detection' and not self.results[stream_name]:
             detections.append("No employee at cash drawer")
+        elif stream_name == 'people_counting':
+            detections.append(f"Male: {self.results[stream_name]['male']}")
+            detections.append(f"Female: {self.results[stream_name]['female']}")
+            detections.append(f"Total: {self.results[stream_name]['total']}")
         return detections
 
     def release(self):
