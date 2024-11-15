@@ -1,12 +1,13 @@
-from PyQt5.QtWidgets import QMainWindow, QTabWidget, QVBoxLayout, QWidget, QPushButton, QHBoxLayout
-from PyQt5.QtCore import QTimer, Qt
-from PyQt5.QtGui import QIcon, QPalette, QColor
+import sys
+import logging
+from PyQt5.QtWidgets import QMainWindow, QTabWidget, QVBoxLayout, QWidget, QPushButton, QShortcut
+from PyQt5.QtCore import QTimer
+from PyQt5.QtGui import QIcon, QPalette, QKeySequence
 from gui.video_tab import VideoTab
 from gui.cash_drawer_tab import CashDrawerTab
 from gui.employee_detection_tab import EmployeeDetectionTab
 from gui.door_detection_tab import DoorDetectionTab
 from gui.people_counting_tab import PeopleCountingTab
-from gui.face_recognition_tab import FaceRecognitionTab
 from gui.settings_tab import SettingsTab
 from gui.alerts_tab import AlertsTab
 from utils.video_processor import VideoProcessor
@@ -32,8 +33,7 @@ class CCTVMonitoringSystem(QMainWindow):
         self.employee_detection_tab = EmployeeDetectionTab(self.video_processor, 'employee_detection')
         self.door_detection_tab = DoorDetectionTab(self.video_processor, 'door_detection')
         self.people_counting_tab = PeopleCountingTab(self.video_processor, 'people_counting')
-        self.face_recognition_tab = FaceRecognitionTab(self.video_processor, 'face_recognition')
-        self.settings_tab = SettingsTab(self.update_camera)
+        self.settings_tab = SettingsTab(self.update_camera, self.set_feature_active)
         self.alerts_tab = AlertsTab()
 
         self.tab_widget.addTab(self.video_tab, QIcon("icons/video.png"), "Video Streams")
@@ -41,12 +41,11 @@ class CCTVMonitoringSystem(QMainWindow):
         self.tab_widget.addTab(self.employee_detection_tab, QIcon("icons/employee.png"), "Employee Detection")
         self.tab_widget.addTab(self.door_detection_tab, QIcon("icons/door.png"), "Door Detection")
         self.tab_widget.addTab(self.people_counting_tab, QIcon("icons/people.png"), "People Counting")
-        self.tab_widget.addTab(self.face_recognition_tab, QIcon("icons/face.png"), "Face Recognition")
         self.tab_widget.addTab(self.settings_tab, QIcon("icons/settings.png"), "Settings")
         self.tab_widget.addTab(self.alerts_tab, QIcon("icons/alert.png"), "Alerts")
 
         self.timer = QTimer(self)
-        self.timer.timeout.connect(self.update_all_tabs)
+        self.timer.timeout.connect(self.update_active_tab)
         self.timer.start(30)  # Update every 30 ms
 
         self.alerts_tab.add_alert("System started")
@@ -56,17 +55,36 @@ class CCTVMonitoringSystem(QMainWindow):
         self.dark_mode_button.clicked.connect(self.toggle_dark_mode)
         self.layout.addWidget(self.dark_mode_button)
 
-    def update_all_tabs(self):
-        for tab in [self.video_tab, self.cash_drawer_tab, self.employee_detection_tab, self.door_detection_tab, 
-                    self.people_counting_tab, self.face_recognition_tab]:
-            tab.update_frame()
+        # Set up logging
+        logging.basicConfig(filename='cctv_system.log', level=logging.INFO,
+                            format='%(asctime)s - %(levelname)s - %(message)s')
+        
+        # Add keyboard shortcut for dark mode toggle
+        self.dark_mode_shortcut = QShortcut(QKeySequence("Ctrl+D"), self)
+        self.dark_mode_shortcut.activated.connect(self.toggle_dark_mode)
+
+        # Connect tab change signal
+        self.tab_widget.currentChanged.connect(self.on_tab_changed)
+
+    def update_active_tab(self):
+        current_tab = self.tab_widget.currentWidget()
+        if hasattr(current_tab, 'update_frame'):
+            current_tab.update_frame()
+
+    def on_tab_changed(self, index):
+        current_tab = self.tab_widget.widget(index)
+        if hasattr(current_tab, 'activate'):
+            current_tab.activate()
 
     def update_camera(self, stream_name, camera_url):
         success = self.video_processor.set_camera(stream_name, camera_url)
         if success:
             self.alerts_tab.add_alert(f"Camera for {stream_name} updated to {camera_url}")
+            logging.info(f"Camera updated: {stream_name} - {camera_url}")
         else:
             self.alerts_tab.add_alert(f"Failed to update camera for {stream_name} to {camera_url}")
+            logging.error(f"Failed to update camera: {stream_name} - {camera_url}")
+        return success
 
     def closeEvent(self, event):
         self.video_processor.release()
@@ -75,8 +93,10 @@ class CCTVMonitoringSystem(QMainWindow):
     def toggle_dark_mode(self):
         if self.palette().color(QPalette.Window).lightness() > 128:
             self.setStyleSheet(self.get_dark_style())
+            logging.info("Dark mode enabled")
         else:
             self.setStyleSheet(self.get_light_style())
+            logging.info("Light mode enabled")
 
     def get_dark_style(self):
         return """
@@ -141,3 +161,7 @@ class CCTVMonitoringSystem(QMainWindow):
                 background-color: #81A1C1;
             }
         """
+
+    def set_feature_active(self, feature_name, is_active):
+        self.video_processor.set_feature_active(feature_name, is_active)
+        self.alerts_tab.add_alert(f"Feature '{feature_name}' {'activated' if is_active else 'deactivated'}")

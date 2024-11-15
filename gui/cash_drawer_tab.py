@@ -15,6 +15,7 @@ class CashDrawerTab(QWidget):
         self.video_label = QLabel()
         self.video_label.setAlignment(Qt.AlignCenter)
         self.video_label.setStyleSheet("border: 2px solid #4C566A; background-color: #2E3440;")
+        self.video_label.setFixedSize(640, 480)
         layout.addWidget(self.video_label)
 
         # Status
@@ -45,3 +46,6 @@ class CashDrawerTab(QWidget):
         self.status_icon.setText(icon)
         self.status_label.setText(f"Cash Drawer Status: {status}")
         self.status_label.setStyleSheet(f"font-size: 18px; font-weight: bold; color: {color};")
+
+    def activate(self):
+        self.video_processor.set_feature_active(self.stream_name, True)
