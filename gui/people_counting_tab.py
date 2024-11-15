@@ -15,6 +15,7 @@ class PeopleCountingTab(QWidget):
         self.video_label = QLabel()
         self.video_label.setAlignment(Qt.AlignCenter)
         self.video_label.setStyleSheet("border: 2px solid #4C566A; background-color: #2E3440;")
+        self.video_label.setFixedSize(640, 480)  # Set fixed size for the video label
         layout.addWidget(self.video_label)
 
         # Total count
@@ -47,7 +48,8 @@ class PeopleCountingTab(QWidget):
             bytes_per_line = ch * w
             qt_image = QImage(frame.data, w, h, bytes_per_line, QImage.Format_RGB888)
             pixmap = QPixmap.fromImage(qt_image)
-            self.video_label.setPixmap(pixmap.scaled(self.video_label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            scaled_pixmap = pixmap.scaled(640, 480, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            self.video_label.setPixmap(scaled_pixmap)
 
         counts = self.video_processor.results[self.stream_name]
         total = counts['male'] + counts['female']

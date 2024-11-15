@@ -22,7 +22,6 @@ class VideoProcessor:
             'cash_drawer': False,
             'employee_detection': True,
             'door_detection': {'detected': False, 'status': 'Unknown', 'movement': None},
-<<<<<<< HEAD
             'people_counting': {'male': 0, 'female': 0, 'total': 0},
             'face_recognition': []
         }
@@ -37,13 +36,6 @@ class VideoProcessor:
         
         self.gender_list = ['Male', 'Female']
         
-=======
-            'people_counting': {'male': 0, 'female': 0},
-            'face_recognition': []
-        }
-        # Load the YOLOv8 model
-        self.door_model = YOLO('door_detection.pt')
->>>>>>> 3ed053dc74d288e7bd84cb2e9cc73ef236fe6100
         self.previous_door_box = None
         self.door_movement_threshold = 5  # pixels
         self.frame_size = (640, 480)  # Set a fixed frame size
@@ -159,7 +151,11 @@ class VideoProcessor:
         ret, frame = self.streams[stream_name].read()
         if ret:
             # Resize the frame to a fixed size
-            frame = cv2.resize(frame, self.frame_size)
+            frame = cv2.resize(frame, self.frame_size, interpolation=cv2.INTER_AREA)
+            
+            if frame.shape[:2] != self.frame_size[::-1]:
+                print(f"Warning: Frame size mismatch. Expected {self.frame_size[::-1]}, got {frame.shape[:2]}")
+                frame = cv2.resize(frame, self.frame_size, interpolation=cv2.INTER_AREA)
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             
             if stream_name == 'door_detection':
@@ -205,7 +201,6 @@ class VideoProcessor:
                     self.previous_door_box = None
                 
                 self.previous_door_frame = frame
-<<<<<<< HEAD
             elif stream_name == 'people_counting':
                 blob = cv2.dnn.blobFromImage(cv2.resize(frame, (300, 300)), 1.0, (300, 300), (104.0, 177.0, 123.0))
                 self.face_net.setInput(blob)
@@ -242,20 +237,10 @@ class VideoProcessor:
                     'female': female_count,
                     'total': male_count + female_count
                 }
-=======
->>>>>>> 3ed053dc74d288e7bd84cb2e9cc73ef236fe6100
             elif stream_name == 'cash_drawer':
                 self.results[stream_name] = np.random.choice([True, False], p=[0.1, 0.9])
             elif stream_name == 'employee_detection':
                 self.results[stream_name] = np.random.choice([True, False], p=[0.8, 0.2])
-<<<<<<< HEAD
-=======
-            elif stream_name == 'people_counting':
-                self.results[stream_name] = {
-                    'male': np.random.randint(0, 10),
-                    'female': np.random.randint(0, 10)
-                }
->>>>>>> 3ed053dc74d288e7bd84cb2e9cc73ef236fe6100
             elif stream_name == 'face_recognition':
                 if np.random.random() < 0.1:
                     self.results[stream_name].append({
@@ -280,13 +265,10 @@ class VideoProcessor:
             detections.append("Cash drawer opened")
         elif stream_name == 'employee_detection' and not self.results[stream_name]:
             detections.append("No employee at cash drawer")
-<<<<<<< HEAD
         elif stream_name == 'people_counting':
             detections.append(f"Male: {self.results[stream_name]['male']}")
             detections.append(f"Female: {self.results[stream_name]['female']}")
             detections.append(f"Total: {self.results[stream_name]['total']}")
-=======
->>>>>>> 3ed053dc74d288e7bd84cb2e9cc73ef236fe6100
         return detections
 
     def release(self):
